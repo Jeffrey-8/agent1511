@@ -23,32 +23,34 @@ def agent_turn(state: AgentState) -> AgentState:
     last_msg = cast(HumanMessage, last_msg)
     user_text = last_msg.content
 
-    # 1) Если пользователь явно спрашивает ПРОСТО «фильтры» —
-    #    не дёргаем LLM вообще, просто показываем текущее состояние.
+    # 1) Показать фильтры по явной просьбе
     if business_agent.is_show_filters_request(user_text):
         reply_text = business_agent.format_filters_for_user(state)
         state["messages"].append(AIMessage(content=reply_text))
         state["ready_to_calculate"] = False
         return state
 
-    # 2) В остальных случаях обновляем фильтры из сообщения
-    business_agent.update_filters_from_message(state, user_text)
-
-    # 3) Проверяем, просит ли пользователь запустить расчёт
+    # 2) Просьба посчитать — просто ставим флаг (без изменения фильтров/параметров)
     if business_agent.is_calculation_request(user_text):
         state["ready_to_calculate"] = True
         return state
 
-    # 4) Обычный диалоговый ответ / уточнение + сразу показываем актуальные фильтры
-    filters_text = business_agent.format_filters_for_user(state)
-    dialog_reply = business_agent.build_agent_reply(state, user_text)
+    # 3) Обычное сообщение — обновляем фильтры и параметры
+    business_agent.update_filters_from_message(state, user_text)
+    business_agent.update_params_from_message(state, user_text)
 
-    # сначала блок с фильтрами, потом пояснение/уточнения от LLM
-    reply_text = filters_text + "\n\n" + dialog_reply
+    # 4) Формируем ответ: текущие фильтры + опциональный комментарий
+    summary = business_agent.format_filters_for_user(state)
+    comment = business_agent.build_agent_reply(state, user_text)
+
+    reply_text = summary
+    if comment:
+        reply_text = summary + "\n\n" + comment
 
     state["messages"].append(AIMessage(content=reply_text))
     state["ready_to_calculate"] = False
     return state
+
 
 
 
@@ -116,6 +118,10 @@ def main_cli():
         "product_type": "Коробка",
         "ready_to_calculate": False,
         "last_result": None,
+        "avg_amount_mmb": None,
+        "avg_amount_other": None,
+        "k": None,
+        "own_share": None,
     }
 
     print("Запущен CLI-агент. Напиши 'выход' для завершения.\n")

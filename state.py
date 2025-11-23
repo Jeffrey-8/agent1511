@@ -22,3 +22,7 @@ class AgentState(TypedDict):
     # Управляющие флаги и результаты
     ready_to_calculate: bool                     # пользователь явно попросил посчитать
     last_result: Optional[Dict[str, Any]]        # результат последнего расчёта
+    avg_amount_mmb: Optional[float]
+    avg_amount_other: Optional[float]
+    k: Optional[float]
+    own_share: Optional[float]

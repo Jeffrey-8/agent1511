@@ -1,12 +1,14 @@
 # llm_client.py
 import logging
 import re
+import uuid
+
 import requests
 from gigachat import GigaChat
 
 AUTH_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
 GIGACHAT_SCOPE = "GIGACHAT_API_PERS"
-RQ_UID = "884a110b-feca-430f-bb5e-57d3d06b2ee7"
+RQ_UID = "884a110b-feca-430f-bb5e-57d3d06b2ee1"
 AUTHORIZATION = (
     "Basic ZDZmMDBiY2EtNTViYi00NTg0LWJkNDAtZjdlNGUzMTY3YjczOmQ2YTUzMmZhLTdmNjMt"
     "NDI4NS1hN2NlLTAzZmZiMWU4YmNjYg=="
@@ -21,19 +23,19 @@ agent_reason_logger.setLevel(logging.INFO)
 agent_reason_logger.propagate = False  # НЕ пускать наверх (в консоль)
 
 # хэндлер в файл logs/agent.log
-fh = logging.FileHandler("logs/agent.log", encoding="utf-8")
-fh.setLevel(logging.INFO)
-fmt = logging.Formatter("%(asctime)s - %(message)s")
-fh.setFormatter(fmt)
-agent_reason_logger.addHandler(fh)
+file_logger = logging.getLogger("llm_reasoning")
+file_handler = logging.FileHandler("logs/agent.log", encoding="utf-8")
+file_handler.setLevel(logging.INFO)
+file_logger.addHandler(file_handler)
 
 
 def get_giga_access_token() -> str:
     payload = {"scope": GIGACHAT_SCOPE}
+    rq_uid = str(uuid.uuid4())
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
         "Accept": "application/json",
-        "RqUID": RQ_UID,
+        "RqUID": rq_uid,
         "Authorization": AUTHORIZATION,
     }
     response = requests.post(AUTH_URL, headers=headers, data=payload, verify=False)
@@ -57,6 +59,7 @@ class GigaChatLLM:
     def chat(self, prompt: str) -> str:
         resp = self.llm.chat(prompt)
         content = resp.choices[0].message.content or ""
+        file_logger.info(content)  # весь RAW уходит в файл
 
         # логируем полный сырой ответ в файл reasoning-логов
         agent_reason_logger.info(

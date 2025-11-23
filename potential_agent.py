@@ -11,6 +11,10 @@ from llm_client import GigaChatLLM
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_AVG_MMB = 500_000.0
+DEFAULT_AVG_OTHER = 500_000.0
+DEFAULT_K = 15.0
+DEFAULT_OWN_SHARE = 10.0
 
 class PotentialCalculationAgent:
     """
@@ -36,6 +40,33 @@ class PotentialCalculationAgent:
         if m:
             return m.group(1).strip()
         return text.strip()
+
+    # def _safe_json_loads(self, text: str):
+    #     text = (text or "").strip()
+    #
+    #     # 1. Сначала пытаемся обычный json.loads на весь текст
+    #     try:
+    #         return json.loads(text)
+    #     except Exception:
+    #         pass
+    #
+    #     # 2. Вырезаем все {...} блоки и пробуем их по очереди (с конца)
+    #     candidates = re.findall(r"\{[\s\S]*?\}", text)
+    #     for raw in reversed(candidates):
+    #         cleaned = raw.strip()
+    #
+    #         # если внутри есть плейсхолдеры вида <...> — это явно шаблон, пропускаем
+    #         if "<" in cleaned and ">" in cleaned:
+    #             continue
+    #
+    #         try:
+    #             return json.loads(cleaned)
+    #         except Exception:
+    #             continue
+    #
+    #     # 3. Если так и не смогли — логируем и возвращаем None
+    #     logger.warning(f"[safe_json] не удалось распарсить JSON даже после перебора: {text!r}")
+    #     return None
 
     def _safe_json_loads(self, raw: str):
         """
@@ -99,34 +130,92 @@ class PotentialCalculationAgent:
         ]
         return any(tr in t for tr in triggers)
 
-    def format_filters_for_user(self, state: Dict[str, Any]) -> str:
+    def format_filters_for_user(self, state) -> str:
         """
-        Красивый текст с текущими фильтрами и параметрами.
+        Человекочитаемый вывод текущих фильтров и параметров.
         """
-        filters = state.get("filters", {}) or {}
-        segment_params = state.get("segment_params", {}) or {}
-        product_type = state.get("product_type", "Коробка")
 
-        industries = filters.get("industries") or "не заданы (берём все отрасли)"
-        revenue = filters.get("revenue") or "не заданы (любой уровень выручки)"
-        staff = filters.get("staff") or "не задан (любой размер штата)"
-        tb = filters.get("tb") or "не задан (все регионы)"
+        filters = state.get("filters") or {}
+        industries = filters.get("industries") or []
+        revenue = filters.get("revenue") or []
+        staff = filters.get("staff") or []
+        tb = filters.get("tb") or []
+        product_type = state.get("product_type", "Коробка") or "Коробка"
 
-        text_lines: List[str] = [
-            "📌 Текущие применённые фильтры и параметры:",
-            f"• Отрасли (ОКВЭД): {industries}",
-            f"• Диапазоны выручки: {revenue}",
-            f"• Размер штата: {staff}",
-            f"• Территориальные банки (ТБ): {tb}",
-            f"• Тип продукта: {product_type}",
-            "• Параметры сегментов (доля владения / Кприб): "
-            f"{json.dumps(segment_params, ensure_ascii=False)}",
-            "",
-            "Если хочешь что-то поменять — просто напиши, например: "
-            "\"сделай только розничную торговлю по Москве\" или "
-            "\"ограничь выручкой до 120 млн\".",
-        ]
-        return "\n".join(text_lines)
+        lines = []
+        lines.append("📌 Текущие применённые фильтры и параметры:")
+
+        # 1. Отрасли
+        if industries:
+            lines.append(f"• Отрасли (ОКВЭД): {industries}")
+        else:
+            lines.append("• Отрасли (ОКВЭД): не заданы (берём все отрасли)")
+
+        # 2. Выручка
+        if revenue:
+            lines.append(f"• Диапазоны выручки: {revenue}")
+        else:
+            lines.append("• Диапазоны выручки: не заданы (любой уровень выручки)")
+
+        # 3. Штат
+        if staff:
+            lines.append(f"• Размер штата: {staff}")
+        else:
+            lines.append("• Размер штата: не задан (любой размер штата)")
+
+        # 4. ТБ
+        if tb:
+            lines.append(f"• Территориальные банки (ТБ): {tb}")
+        else:
+            lines.append("• Территориальные банки (ТБ): не задан (все регионы)")
+
+        # 5. Тип продукта
+        lines.append(f"• Тип продукта: {product_type}")
+
+        # 6. Параметры расчёта (новый блок)
+        avg_mmb = state.get("avg_amount_mmb")
+        avg_other = state.get("avg_amount_other")
+        k = state.get("k")
+        own_share = state.get("own_share")
+
+        def fmt_rub(val: float) -> str:
+            return f"{int(val):,} руб.".replace(",", " ")
+
+        def fmt_pct(val: float) -> str:
+            # можно с одним знаком после запятой, но для простоты — целое
+            return f"{val:.1f}%".rstrip("0").rstrip(".")
+
+        lines.append("• Параметры расчёта:")
+
+        if avg_mmb is None:
+            lines.append(
+                f"  • Средний чек в ММБ: не задан (по умолчанию {fmt_rub(DEFAULT_AVG_MMB)})"
+            )
+        else:
+            lines.append(f"  • Средний чек в ММБ: {fmt_rub(avg_mmb)}")
+
+        if avg_other is None:
+            lines.append(
+                f"  • Средний чек в других сегментах: не задан (по умолчанию {fmt_rub(DEFAULT_AVG_OTHER)})"
+            )
+        else:
+            lines.append(f"  • Средний чек в других сегментах: {fmt_rub(avg_other)}")
+
+        if k is None:
+            lines.append(
+                f"  • Кприб (k): не задан (по умолчанию {fmt_pct(DEFAULT_K)})"
+            )
+        else:
+            lines.append(f"  • Кприб (k): {fmt_pct(k)}")
+
+        if own_share is None:
+            lines.append(
+                f"  • Доля владения (own_share): не задана (по умолчанию {fmt_pct(DEFAULT_OWN_SHARE)})"
+            )
+        else:
+            lines.append(f"  • Доля владения (own_share): {fmt_pct(own_share)}")
+
+        return "\n".join(lines)
 
     # ==== 2. Обновление фильтров (маленькие промпты) ==========================
 
@@ -586,108 +675,272 @@ class PotentialCalculationAgent:
         logger.info(f"[dialog] reply_answer={answer}")
         return answer
 
-    def run_full_calculation(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        filters = state.get("filters", {}) or {}
-        segment_params = state.get("segment_params", {}) or {}
-        product_type = state.get("product_type", "Коробка")
+    def run_full_calculation(self, state) -> dict:
+        """
+        Запуск пайплайна расчета потенциала.
 
-        logger.info(
-            f"[calc] Запуск расчёта с filters={filters}, "
-            f"segment_params={segment_params}, product_type={product_type}"
-        )
+        Берём:
+        - фильтры из state["filters"]
+        - пользовательские параметры, если заданы
+        - остальное — дефолты
+        и сохраняем, какие параметры были взяты по умолчанию,
+        чтобы потом предупредить пользователя.
+        """
+        filters = state.get("filters") or {}
+
+        used_defaults = []  # сюда сложим, что именно было взято по умолчанию
+
+        # средний чек в ММБ
+        if state.get("avg_amount_mmb") is None:
+            avg_amount_mmb = 500_000.0
+            used_defaults.append(("avg_amount_mmb", avg_amount_mmb))
+        else:
+            avg_amount_mmb = float(state["avg_amount_mmb"])
+
+        # средний чек в других сегментах
+        if state.get("avg_amount_other") is None:
+            avg_amount_other = 500_000.0
+            used_defaults.append(("avg_amount_other", avg_amount_other))
+        else:
+            avg_amount_other = float(state["avg_amount_other"])
+
+        # Кприб, %
+        if state.get("k") is None:
+            k = 15.0
+            used_defaults.append(("k", k))
+        else:
+            k = float(state["k"])
+
+        # доля владения, %
+        if state.get("own_share") is None:
+            own_share = 10.0
+            used_defaults.append(("own_share", own_share))
+        else:
+            own_share = float(state["own_share"])
+
+        product_type = state.get("product_type", "Коробка") or "Коробка"
 
         result = calculate_potential_full_pipeline(
-            data_directory=self.data_dir,
+            data_dir=self.data_dir,
             filters=filters,
-            segment_params=segment_params,
+            avg_amount_mmb=avg_amount_mmb,
+            avg_amount_other=avg_amount_other,
+            k=k,
+            own_share=own_share,
             product_type=product_type,
         )
+
+        # приклеиваем метаданные к результату
+        result["meta"] = {
+            "avg_amount_mmb": avg_amount_mmb,
+            "avg_amount_other": avg_amount_other,
+            "k": k,
+            "own_share": own_share,
+            "used_defaults": used_defaults,
+        }
+
         return result
 
-    def summarize_result_for_user(self, result: Dict[str, Any], top_n_per_segment: int = 10) -> str:
+    def summarize_result_for_user(self, result: dict) -> str:
         """
-        Подробное резюме результатов для пользователя БЕЗ таблиц.
+        Витринный вывод по новой аналитике.
 
-        Показываем:
-        - общий итог;
-        - суммарный потенциал по сегментам (всего и только "да");
-        - по каждому сегменту: топ-N каналов с основными метриками (в виде маркеров).
+        Важно:
+        - В расчётах используем "Рынок" как есть.
+        - В тексте для пользователя "оценка рынка" = клиенты + не клиенты,
+          чтобы соответствовать формулировке аналитики: Рынок = Клиент + НеКлиент.
         """
-        rows: List[Dict[str, Any]] = result.get("potential_results", [])
         segment_metrics = result.get("segment_metrics", {})
+        rows = result.get("channel_results", [])
         filtered_count = result.get("filtered_records_count", 0)
 
-        # --- общий итог по всем каналам ---
-        total_potential_all = sum(float(r.get("total_potential", 0.0)) for r in rows)
-        ok_rows = [r for r in rows if str(r.get("Решение", "")).lower() == "да"]
+        meta = result.get("meta", {}) or {}
+        used_defaults = meta.get("used_defaults") or []
 
         lines: List[str] = []
-        lines.append(f"✔ Расчёт завершён. В выборку попало {filtered_count} записей.")
-        lines.append(f"✔ Обнаружено {len(segment_metrics)} сегментов, по которым выполнен расчёт.")
-        lines.append(f"✔ Итоговый суммарный потенциал по всем каналам: ~{round(total_potential_all, 3)} млн руб.")
-        lines.append(f"✔ Каналов с положительным решением (\"да\"): {len(ok_rows)}.")
 
-        # --- агрегаты по сегментам ---
-        seg_total: Dict[str, float] = {}
-        seg_total_ok: Dict[str, float] = {}
+        lines.append(f"✔ Расчёт завершён. В выборку попало {filtered_count} записей.\n")
 
-        for r in rows:
-            seg = r.get("Сегмент", "N/A")
-            pot = float(r.get("total_potential", 0.0))
-            seg_total[seg] = seg_total.get(seg, 0.0) + pot
-            if str(r.get("Решение", "")).lower() == "да":
-                seg_total_ok[seg] = seg_total_ok.get(seg, 0.0) + pot
+        # ⚠ Предупреждение о дефолтных параметрах
+        if used_defaults:
+            names_map = {
+                "avg_amount_mmb": "средний чек в ММБ",
+                "avg_amount_other": "средний чек в других сегментах",
+                "k": "Кприб, %",
+                "own_share": "доля владения, %",
+            }
+            warn_lines = []
+            for key, val in used_defaults:
+                label = names_map.get(key, key)
+                if key in {"k", "own_share"}:
+                    warn_lines.append(f"• {label}: использовано значение по умолчанию {val}%")
+                else:
+                    warn_lines.append(
+                        f"• {label}: использовано значение по умолчанию {int(val):,} руб.".replace(",", " "))
 
-        if seg_total:
-            lines.append("\n📊 Суммарный потенциал по сегментам:")
-            for seg, pot in sorted(seg_total.items(), key=lambda x: x[1], reverse=True):
-                ok_pot = seg_total_ok.get(seg, 0.0)
-                lines.append(
-                    f"  • {seg}: всего ~{round(pot, 3)} млн руб., "
-                    f"из них по \"да\" ~{round(ok_pot, 3)} млн руб."
-                )
-
-        # --- детализация по каналам внутри сегментов ---
-        seg_rows: Dict[str, List[Dict[str, Any]]] = {}
-        for r in rows:
-            seg = r.get("Сегмент", "N/A")
-            seg_rows.setdefault(seg, []).append(r)
-
-        lines.append("\n📌 Детализация по каналам внутри сегментов:")
-
-        for seg, seg_list in sorted(seg_rows.items(), key=lambda kv: seg_total.get(kv[0], 0.0), reverse=True):
-            lines.append(f"\n▶ Сегмент: {seg}")
-
-            # сортируем каналы внутри сегмента по потенциалу
-            seg_list_sorted = sorted(
-                seg_list,
-                key=lambda r: float(r.get("total_potential", 0.0)),
-                reverse=True,
+            lines.append("⚠ Некоторые параметры не были указаны, использованы значения по умолчанию:")
+            lines.extend(warn_lines)
+            lines.append(
+                "Если хочешь задать их явно, напиши, например: "
+                "\"средний чек в ММБ 500 тысяч, в других сегментах 800 тысяч, "
+                "Кприб 15%, доля владения 10%\".\n"
             )
 
-            limited = seg_list_sorted[:top_n_per_segment]
+        # агрегируем по сегментам сумму amount_ab только по "да"
+        seg_amount: Dict[str, float] = {}
+        seg_has_yes: Dict[str, bool] = {}
 
-            for r in limited:
-                ch = str(r.get("Канал", "N/A"))
-                pot = float(r.get("total_potential", 0.0))
-                calc_clients = r.get("calc_clients", "")
-                rate_ab = r.get("rate_ab", "")
-                decision = r.get("Решение", "")
+        for r in rows:
+            seg = r["Сегмент"]
+            if r.get("Решение") == "да":
+                seg_amount[seg] = seg_amount.get(seg, 0.0) + float(r.get("amount_ab", 0.0))
+                seg_has_yes[seg] = True
+            else:
+                seg_has_yes.setdefault(seg, False)
 
-                # одна строка на канал, без таблиц
-                lines.append(
-                    f"  • Канал: {ch}; потенциал ~{round(pot, 3)} млн руб.; "
-                    f"клиентов ≈ {calc_clients}; ставка {rate_ab}%; решение: {decision}"
-                )
+        lines.append("📊 Потенциал по сегментам (суммарное значение дохода сегмента по всем каналам)")
 
-            if len(seg_list_sorted) > len(limited):
-                lines.append(f"  • … ещё {len(seg_list_sorted) - len(limited)} канал(ов) в этом сегменте опущено.")
+        all_segs = sorted(seg_has_yes.keys(), key=lambda s: seg_amount.get(s, 0.0), reverse=True)
 
-        lines.append(
-            "\nЕсли нужно — могу показать только каналы с решением \"да\", "
-            "или детализировать конкретный сегмент (например, \"детализация ММБ\")."
-        )
+        for seg in all_segs:
+            if not seg_has_yes.get(seg):
+                lines.append(f"• {seg}: продажа не возможна")
+            else:
+                val = seg_amount.get(seg, 0.0)
+                lines.append(f"• {seg}: {round(val, 3)} млн руб.")
+
+        lines.append("\n📌 Детализация по каналам:")
+
+        seg_rows: Dict[str, List[Dict[str, Any]]] = {}
+        for r in rows:
+            seg = r["Сегмент"]
+            seg_rows.setdefault(seg, []).append(r)
+
+        for seg in all_segs:
+            lines.append(f"\n▶ Сегмент: {seg}")
+
+            metrics = segment_metrics.get(seg, {})
+
+            market_raw = float(metrics.get("Рынок", 0.0))
+            clients = int(round(float(metrics.get("Активные клиенты Банка", 0.0))))
+            non_clients = int(round(float(metrics.get("Спящие клиенты и не клиенты Банка", 0.0))))
+            market_for_output = clients + non_clients
+
+            for r in seg_rows.get(seg, []):
+                channel = r["Канал"]
+                if r.get("Решение") != "да":
+                    reason = r.get("Причина")
+                    if reason:
+                        lines.append(f"• Канал: {channel}; продажа в канале не возможна ({reason})")
+                    else:
+                        lines.append(f"• Канал: {channel}; продажа в канале не возможна")
+                else:
+                    amount_ab = float(r.get("amount_ab", 0.0))
+                    lines.append(
+                        f"• Канал: {channel}; оценка рынка = {market_for_output}, "
+                        f"из них клиенты = {clients} и не клиенты = {non_clients}, "
+                        f"потенциальный доход сегмента ~ {round(amount_ab, 3)} млн руб."
+                    )
 
         return "\n".join(lines)
 
+    def update_params_from_message(self, state, user_message: str) -> None:
+            """
+            Достаём из текста параметры:
+            - avg_amount_mmb      — средний чек в ММБ, руб.
+            - avg_amount_other    — средний чек в других сегментах, руб.
+            - k                   — Кприб, %
+            - own_share           — доля владения, %
+            """
 
+            prompt = f"""
+    <REASONING>
+    Запрос пользователя: "{user_message}"
+
+    Твоя задача — извлечь числовые параметры для расчёта потенциала.
+
+    Параметры:
+    - avg_amount_mmb: средний чек в ММБ, в рублях;
+    - avg_amount_other: средний чек в других сегментах, в рублях;
+    - k: Кприб, в процентах (0–100);
+    - own_share: доля владения, в процентах (0–100).
+
+    Если параметр явно не указан — верни null.
+    Ничего не выдумывай: только то, что явно указано или однозначно следует из текста.
+    </REASONING>
+    <ANSWER>
+    Ответь строго ОДНИМ JSON-объектом БЕЗ пояснений, БЕЗ примеров и БЕЗ markdown.
+
+    Только такой формат:
+
+    {{
+      "avg_amount_mmb": 500000,
+      "avg_amount_other": 800000,
+      "k": 15,
+      "own_share": 10
+    }}
+
+    Если какой-то параметр не указан — поставь null:
+
+    {{
+      "avg_amount_mmb": 500000,
+      "avg_amount_other": null,
+      "k": 20,
+      "own_share": null
+    }}
+    </ANSWER>
+    """
+
+            ans_raw = self.llm.chat(prompt)
+            logger.debug(f"[params] raw_answer={ans_raw!r}")
+
+            data = self._safe_json_loads(ans_raw) or {}
+
+            def _upd(name: str):
+                val = data.get(name)
+                if val is None:
+                    return
+                try:
+                    f = float(val)
+                except (TypeError, ValueError):
+                    return
+                state[name] = f
+
+            _upd("avg_amount_mmb")
+            _upd("avg_amount_other")
+            _upd("k")
+            _upd("own_share")
+
+            # небольшой хелпер: если задан только один чек — второй приравниваем к нему
+            if state.get("avg_amount_mmb") and not state.get("avg_amount_other"):
+                state["avg_amount_other"] = state["avg_amount_mmb"]
+            if state.get("avg_amount_other") and not state.get("avg_amount_mmb"):
+                state["avg_amount_mmb"] = state["avg_amount_other"]
+
+    def get_missing_params(self, state) -> list[str]:
+        missing = []
+        if not state.get("avg_amount_mmb"):
+            missing.append("средний чек в ММБ (avg_amount_mmb)")
+        if not state.get("avg_amount_other"):
+            missing.append("средний чек в других сегментах (avg_amount_other)")
+        if not state.get("k"):
+            missing.append("Кприб, % (k)")
+        if not state.get("own_share"):
+            missing.append("доля владения, % (own_share)")
+        return missing
+
+    def build_missing_params_reply(self, state) -> str:
+        missing = self.get_missing_params(state)
+        if not missing:
+            return ""
+
+        lines = []
+        lines.append("Перед расчётом нужно уточнить несколько параметров:\n")
+        for item in missing:
+            lines.append(f"• {item}")
+        lines.append(
+            "\nНапиши, пожалуйста, значения в свободной форме. "
+            "Например: \"средний чек в ММБ 500 тысяч, в других сегментах 800 тысяч, "
+            "Кприб 15%, доля владения 10%\"."
+        )
+        return "\n".join(lines)
