@@ -1,0 +1,9 @@
+python-telegram-bot>=20.7
+langgraph>=0.0.1
+pydantic>=2.0.0
+gigachat>=0.1.43
+requests>=2.31.0
+pandas>=2.0.0
+openpyxl>=3.0.0
+python-dotenv>=1.0.0
+urllib3>=2.0.0
