@@ -1,0 +1,52 @@
+# =============================================================================
+# REQUIREMENTS.TXT - Зависимости проекта
+# =============================================================================
+#
+# Установка:
+#   pip install -r requirements.txt
+#
+# Или с использованием виртуального окружения:
+#   python -m venv venv
+#   source venv/bin/activate  # для Linux/Mac
+#   venv\Scripts\activate     # для Windows
+#   pip install -r requirements.txt
+#
+# =============================================================================
+
+# Telegram Bot API
+python-telegram-bot>=20.0,<21.0
+
+# Environment Variables Management
+python-dotenv>=1.0.0
+
+# HTTP Requests
+requests>=2.31.0
+urllib3>=2.0.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Excel Files Support
+openpyxl>=3.1.0
+xlrd>=2.0.0
+
+# Database
+# SQLite идет встроенным в Python, но можно добавить расширения:
+# sqlalchemy>=2.0.0  # если планируется использовать ORM
+
+# Optional: For better async support
+# aiohttp>=3.9.0
+# aiofiles>=23.0.0
+
+# =============================================================================
+# ВЕРСИИ PYTHON
+# =============================================================================
+# Проект протестирован на Python 3.9, 3.10, 3.11
+# Рекомендуемая версия: Python 3.10+
+#
+# Проверить версию:
+#   python --version
+#
+# =============================================================================
+

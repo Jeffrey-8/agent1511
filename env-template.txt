@@ -1,0 +1,96 @@
+# =============================================================================
+# ШАБЛОН .ENV ФАЙЛА ДЛЯ TELEGRAM BOT "ПОТЕНЦИАЛ ПАРТНЕРСКОЙ ПРОГРАММЫ"
+# =============================================================================
+# 
+# ИНСТРУКЦИЯ:
+# 1. Скопируйте этот файл и переименуйте в .env
+# 2. Заполните все значения вашими реальными данными
+# 3. Не загружайте .env в git!
+#
+# =============================================================================
+
+# =============================================================================
+# TELEGRAM BOT CONFIGURATION
+# =============================================================================
+# Токен Telegram бота (получить у @BotFather)
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+
+# =============================================================================
+# GIGACHAT API CONFIGURATION
+# =============================================================================
+# Base64-encoded authorization token для GigaChat
+# Формат: echo -n "CLIENT_ID:CLIENT_SECRET" | base64
+GIGACHAT_AUTH=your_base64_encoded_auth_token_here
+
+# URL для получения access token
+GIGACHAT_TOKEN_URL=https://ngw.devices.sberbank.ru:9443/api/v2/oauth
+
+# URL API GigaChat для запросов к модели
+GIGACHAT_API_URL=https://gigachat.devices.sberbank.ru/api/v1/chat/completions
+
+# Scope для авторизации (стандартное значение)
+GIGACHAT_SCOPE=GIGACHAT_API_PERS
+
+# Модель GigaChat для использования
+# Доступные модели: GigaChat, GigaChat-Pro, GigaChat-Plus
+GIGACHAT_MODEL=GigaChat
+
+# =============================================================================
+# ИНСТРУКЦИЯ ПО ПОЛУЧЕНИЮ ПАРАМЕТРОВ
+# =============================================================================
+
+### 1. Получение Telegram Bot Token:
+#
+# Шаг 1: Откройте Telegram и найдите @BotFather
+# Шаг 2: Отправьте команду /newbot
+# Шаг 3: Укажите имя бота (например: Потенциал Калькулятор)
+# Шаг 4: Укажите username бота (например: potential_calc_bot)
+# Шаг 5: Скопируйте полученный токен вида: 1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+# Шаг 6: Вставьте токен в TELEGRAM_BOT_TOKEN
+#
+# Пример:
+# TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+
+### 2. Получение GigaChat credentials:
+#
+# Шаг 1: Зарегистрируйтесь на https://developers.sber.ru/
+# Шаг 2: Войдите в личный кабинет
+# Шаг 3: Перейдите в раздел "GigaChat API"
+# Шаг 4: Создайте новый проект
+# Шаг 5: Получите CLIENT_ID и CLIENT_SECRET
+#
+# Шаг 6: Закодируйте credentials в Base64:
+#   Для Linux/Mac:
+#     echo -n "YOUR_CLIENT_ID:YOUR_CLIENT_SECRET" | base64
+#
+#   Для Windows (PowerShell):
+#     [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("YOUR_CLIENT_ID:YOUR_CLIENT_SECRET"))
+#
+# Шаг 7: Полученную Base64 строку вставьте в GIGACHAT_AUTH
+#
+# Пример:
+# GIGACHAT_AUTH=YWJjZGVmOjEyMzQ1Njc4OTA=
+
+### 3. Проверка настроек:
+#
+# После заполнения .env файла запустите бота:
+#   python telegram_bot.py
+#
+# Если все настроено правильно, вы увидите:
+#   "Бот запущен и готов к работе..."
+#
+# Если есть ошибки, проверьте:
+# - Все ли переменные заполнены
+# - Правильность токенов
+# - Доступность API endpoints
+
+# =============================================================================
+# НЕОБХОДИМЫЕ ПАКЕТЫ (requirements.txt)
+# =============================================================================
+# python-telegram-bot>=20.0
+# python-dotenv>=1.0.0
+# requests>=2.31.0
+# pandas>=2.0.0
+# openpyxl>=3.1.0
+# urllib3>=2.0.0
+
